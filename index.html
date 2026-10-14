@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Paletka">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a1b36">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>html{color-scheme:dark;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);background:#0a1b36}body{margin:0}</style>
+<title>Paletka</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Układ: pełnoekranowa kanwa z twarzą rakiety padlowej (otwory, punkt idealny), HUD u góry, panele na wierzchu.
+   Jedna ciemna oprawa z wyboru: wieczorny kort. */
+:root {
+  --ground: #0a1b36;
+  --face: #1c56b0;
+  --face-edge: #eef4ff;
+  --hole: #123c82;
+  --ball: #d6f23c;
+  --ball-deep: #8fb31a;
+  --ink: #f3f7ff;
+  --ink-soft: #a9bddf;
+  --panel: #0e2447;
+  --on-ball: #0a1b36;
+  --display: 'Barlow Condensed', 'Arial Narrow', system-ui, sans-serif;
+  --body: 'Barlow', system-ui, -apple-system, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--body); overflow: hidden; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
+#app { position: relative; height: 100%; width: 100%; }
+#c { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.hud { position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: flex-start; padding-block: 10px 0; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); pointer-events: none; }
+#score { font-family: var(--display); font-weight: 800; font-size: 84px; line-height: .9; font-variant-numeric: tabular-nums; }
+.best { font-size: 15px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); padding-top: 12px; text-align: right; }
+.best b { font-family: var(--display); font-size: 28px; letter-spacing: 0; color: var(--ink); margin-left: 6px; font-variant-numeric: tabular-nums; }
+#hint { position: absolute; left: 0; right: 0; bottom: 0; text-align: center; font-size: 17px; font-weight: 500; line-height: 1.35; color: var(--ink); padding-block: 0 26px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); pointer-events: none; }
+.panel { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(6, 16, 34, .72); padding-block: 24px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.card { width: 100%; max-width: 360px; background: var(--panel); border: 2px solid var(--face-edge); border-radius: 28px; padding: 28px 24px; display: flex; flex-direction: column; gap: 14px; }
+.card h1, .card h2 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 56px; line-height: .95; text-transform: uppercase; text-wrap: balance; }
+.card h2 { font-size: 44px; }
+.card p { margin: 0; font-size: 17px; line-height: 1.45; color: var(--ink-soft); }
+.card ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 16px; line-height: 1.4; color: var(--ink); }
+.card ul li::marker { color: var(--ball); }
+.big { font-family: var(--display); font-weight: 800; font-size: 96px; line-height: .9; font-variant-numeric: tabular-nums; color: var(--ball); }
+.btn { appearance: none; border: 0; border-radius: 999px; background: var(--ball); color: var(--on-ball); font-family: var(--display); font-weight: 800; font-size: 26px; letter-spacing: .04em; text-transform: uppercase; min-height: 56px; padding: 0 28px; cursor: pointer; margin-top: 6px; }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible { outline: 3px solid var(--face-edge); outline-offset: 3px; }
+</style>
+<div id="app">
+  <canvas id="c" aria-label="Boisko do gry w podbijanie piłeczki"></canvas>
+  <header class="hud">
+    <div id="score" aria-live="polite">0</div>
+    <div class="best">Rekord<b id="best">0</b></div>
+  </header>
+  <div id="hint" hidden></div>
+  <section class="panel" id="startPanel">
+    <div class="card">
+      <h1>Paletka</h1>
+      <p>Telefon to Twoja paletka, jak w padlu albo ping-pongu. Piłeczka jest na ekranie.</p>
+      <ul>
+        <li>Połóż telefon poziomo, ekranem do góry.</li>
+        <li>Machnij nim w górę dokładnie wtedy, gdy piłeczka spada.</li>
+        <li>Przechyl telefon przy uderzeniu, żeby posłać piłeczkę w bok.</li>
+      </ul>
+      <button class="btn" id="startBtn" type="button">Zaczynamy</button>
+    </div>
+  </section>
+  <section class="panel" id="overPanel" hidden>
+    <div class="card">
+      <h2>Piłeczka spadła</h2>
+      <div class="big" id="finalScore">0</div>
+      <p id="finalNote">odbić z rzędu</p>
+      <button class="btn" id="againBtn" type="button">Jeszcze raz</button>
+    </div>
+  </section>
+</div>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var cv = $('c'), ctx = cv.getContext('2d');
+  var G = 9.81, HIT_WINDOW = 0.14, SWING_MIN = 5.5;
+  var COL = { ground: '#0a1b36', face: '#1c56b0', edge: '#eef4ff', hole: '#123c82', ball: '#d6f23c', ballDeep: '#8fb31a' };
+  try {
+    var cs = getComputedStyle(document.documentElement);
+    var rd = function (n, d) { var v = cs.getPropertyValue(n).trim(); return v || d; };
+    COL = { ground: rd('--ground', COL.ground), face: rd('--face', COL.face), edge: rd('--face-edge', COL.edge), hole: rd('--hole', COL.hole), ball: rd('--ball', COL.ball), ballDeep: rd('--ball-deep', COL.ballDeep) };
+  } catch (e) {}
+
+  // ---- stan gry ----
+  var S = { phase: 'idle', x: 0, y: 0, h: 0, vx: 0, vy: 0, vz: 0, contactT: 0, score: 0, best: 0,
+            swingT: -1e9, swingP: 0, tiltR: 0, tiltF: 0, armedAt: 0 };
+  try { S.best = parseInt(localStorage.getItem('paletka.best') || '0', 10) || 0; } catch (e) {}
+  $('best').textContent = S.best;
+  var sensors = false;     // czy docierają dane z czujników ruchu
+  var touchMode = false;   // tryb dotykowy, gdy czujników brak
+
+  // ---- dźwięk ----
+  var ac = null;
+  function beep(f, d, vol) {
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      var o = ac.createOscillator(), g = ac.createGain();
+      o.type = 'triangle'; o.frequency.value = f;
+      g.gain.setValueAtTime(vol || 0.16, ac.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + d);
+      o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + d);
+    } catch (e) {}
+  }
+
+  // ---- czujniki ----
+  var lp = null, lastMT = 0;
+  function onMotion(e) {
+    var a = e.accelerationIncludingGravity;
+    if (!a || a.x == null || a.y == null || a.z == null) return;
+    var now = performance.now();
+    sensors = true;
+    var v = [a.x, a.y, a.z];
+    if (!lp) { lp = v.slice(); lastMT = now; return; }
+    var dt = Math.min((now - lastMT) / 1000, 0.1); lastMT = now;
+    var k = 1 - Math.exp(-dt / 0.6);
+    for (var i = 0; i < 3; i++) lp[i] += (v[i] - lp[i]) * k;
+    var n = Math.hypot(lp[0], lp[1], lp[2]) || 1;
+    // Przyspieszenie wzdłuż "w górę" (znak konwencji sprzętu się skraca, bo mnożymy przez uśrednioną grawitację).
+    var up = ((v[0] - lp[0]) * lp[0] + (v[1] - lp[1]) * lp[1] + (v[2] - lp[2]) * lp[2]) / n;
+    var sg = lp[2] >= 0 ? 1 : -1;
+    S.tiltR = -lp[0] / n * sg;   // > 0: prawa krawędź niżej
+    S.tiltF = -lp[1] / n * sg;   // > 0: górna krawędź niżej
+    if (up > SWING_MIN) {
+      if (now - S.swingT > 300) S.swingP = 0;
+      S.swingT = now;
+      S.swingP = Math.max(S.swingP, up / G);
+    }
+  }
+
+  // ---- tryb dotykowy: miejsce dotyku = przechył, dotyk = machnięcie ----
+  function pointerTilt(ev) {
+    var r = cv.getBoundingClientRect();
+    var px = (ev.clientX - r.left) / r.width * 2 - 1;
+    var py = (ev.clientY - r.top) / r.height * 2 - 1;
+    S.tiltR = Math.max(-1, Math.min(1, px)) * 0.25;
+    S.tiltF = -Math.max(-1, Math.min(1, py)) * 0.25;
+  }
+  cv.addEventListener('pointermove', function (ev) { if (touchMode) pointerTilt(ev); });
+  cv.addEventListener('pointerdown', function (ev) {
+    if (!touchMode) return;
+    pointerTilt(ev);
+    S.swingT = performance.now();
+    S.swingP = 1.2;
+  });
+
+  // ---- fizyka ----
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function launchVz() { return clamp(2.4 + S.swingP * 1.8, 2.8, 5.2); }
+  function consumeSwing() { S.swingT = -1e9; S.swingP = 0; }
+  function hit(first) {
+    if (!first) {
+      S.score++;
+      $('score').textContent = S.score;
+      if (S.score > S.best) {
+        S.best = S.score; $('best').textContent = S.best;
+        try { localStorage.setItem('paletka.best', String(S.best)); } catch (e) {}
+      }
+      var drift = 0.15 + Math.min(S.score, 30) * 0.01;
+      S.vx = S.tiltR * 3.2 + (Math.random() * 2 - 1) * drift;
+      S.vy = -S.tiltF * 3.2 * 0.8 + (Math.random() * 2 - 1) * drift;
+    } else {
+      S.vx = 0; S.vy = 0;
+    }
+    S.vz = launchVz();
+    consumeSwing();
+    S.phase = 'flying';
+    beep(first ? 660 : 880 + Math.min(S.score, 20) * 12, 0.07);
+    syncUI();
+  }
+  function over() {
+    S.phase = 'over';
+    beep(200, 0.3, 0.18);
+    $('finalScore').textContent = S.score;
+    $('finalNote').textContent = S.score === 1 ? 'odbicie' : (S.score >= 2 && S.score <= 4 ? 'odbicia z rzędu' : 'odbić z rzędu');
+    syncUI();
+  }
+  function step(now, dt) {
+    var age = (now - S.swingT) / 1000;
+    if (S.phase === 'ready') {
+      if (now > S.armedAt && age < 0.1) hit(true);
+    } else if (S.phase === 'flying') {
+      S.vz -= G * dt; S.h += S.vz * dt; S.x += S.vx * dt; S.y += S.vy * dt;
+      if (S.h <= 0 && S.vz < 0) {
+        S.h = 0;
+        if (Math.abs(S.x) > 1 || Math.abs(S.y) > 1) over();
+        else if (age < HIT_WINDOW) hit(false);
+        else { S.phase = 'contact'; S.contactT = 0; }
+      }
+    } else if (S.phase === 'contact') {
+      S.contactT += dt;
+      if (age < HIT_WINDOW) hit(false);
+      else if (S.contactT > HIT_WINDOW) over();
+    }
+  }
+
+  // ---- interfejs ----
+  function syncUI() {
+    $('startPanel').hidden = S.phase !== 'idle';
+    $('overPanel').hidden = S.phase !== 'over';
+    var hint = $('hint');
+    hint.hidden = S.phase !== 'ready';
+    hint.textContent = touchMode
+      ? 'Dotknij ekranu, by podać. Miejsce dotyku ustawia przechył paletki.'
+      : 'Machnij telefonem w górę, by podać piłeczkę.';
+  }
+  function begin() {
+    S.score = 0; S.x = 0; S.y = 0; S.h = 0; S.vx = 0; S.vy = 0; S.vz = 0;
+    $('score').textContent = '0';
+    consumeSwing();
+    S.phase = 'ready';
+    S.armedAt = performance.now() + 500;
+    syncUI();
+  }
+  function enableSensors() {
+    var D = window.DeviceMotionEvent;
+    var ask = (D && typeof D.requestPermission === 'function') ? D.requestPermission() : Promise.resolve('granted');
+    return Promise.resolve(ask).then(function (r) {
+      if (r === 'granted') window.addEventListener('devicemotion', onMotion);
+    }).catch(function () {});
+  }
+  var started = false;
+  $('startBtn').addEventListener('click', function () {
+    beep(1, 0.01, 0.0001); // odblokowuje dźwięk na iOS
+    try { if (navigator.wakeLock) navigator.wakeLock.request('screen').catch(function () {}); } catch (e) {}
+    if (started) { begin(); return; }
+    started = true;
+    enableSensors().then(function () {
+      setTimeout(function () {
+        if (!sensors) { touchMode = true; }
+        syncUI();
+      }, 1200);
+      begin();
+    });
+  });
+  $('againBtn').addEventListener('click', begin);
+
+  // ---- rysowanie ----
+  var u = 1;
+  function resize() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 3);
+    var w = cv.clientWidth, h = cv.clientHeight;
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    u = Math.max(0.5, Math.min(w / 390, h / 760));
+  }
+  window.addEventListener('resize', resize);
+  function rr(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+  function draw() {
+    var W = cv.clientWidth, H = cv.clientHeight;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = COL.ground; ctx.fillRect(0, 0, W, H);
+    var fw = Math.min(W - 40 * u, 350 * u), fh = H - 250 * u;
+    var fx = (W - fw) / 2, fy = (H - fh) / 2 + 10 * u;
+    // twarz rakiety
+    ctx.fillStyle = COL.face; rr(fx, fy, fw, fh, 90 * u); ctx.fill();
+    ctx.lineWidth = 5 * u; ctx.strokeStyle = COL.edge; ctx.stroke();
+    // otwory
+    ctx.save(); rr(fx, fy, fw, fh, 90 * u); ctx.clip();
+    ctx.fillStyle = COL.hole;
+    var gap = 24 * u;
+    for (var py = fy + gap; py < fy + fh; py += gap) {
+      var row = Math.round((py - fy) / gap);
+      for (var px = fx + gap / 2 + (row % 2 ? gap / 2 : 0); px < fx + fw; px += gap) {
+        ctx.beginPath(); ctx.arc(px, py, 3.6 * u, 0, 6.2832); ctx.fill();
+      }
+    }
+    ctx.restore();
+    // punkt idealny
+    var cx = fx + fw / 2, cy = fy + fh / 2;
+    ctx.lineWidth = 2.5 * u; ctx.strokeStyle = 'rgba(238,244,255,.45)';
+    ctx.beginPath(); ctx.arc(cx, cy, 46 * u, 0, 6.2832); ctx.stroke();
+    // piłeczka
+    var r = 26 * u;
+    var hw = fw / 2 - r * 0.45, hh = fh / 2 - r * 0.45;
+    var bx = cx + S.x * hw, by = cy + S.y * hh;
+    var sc = 1 + S.h * 0.45, lift = S.h * 46 * u;
+    ctx.fillStyle = 'rgba(4,12,30,' + (0.4 - Math.min(S.h, 1) * 0.18) + ')';
+    ctx.beginPath(); ctx.ellipse(bx, by + 5 * u, r / sc * 1.05, r / sc * 0.7, 0, 0, 6.2832); ctx.fill();
+    var gx = bx - r * 0.3 * sc, gy = by - lift - r * 0.35 * sc;
+    var grd = ctx.createRadialGradient(gx, gy, 2 * u, bx, by - lift, r * sc);
+    grd.addColorStop(0, '#f2ff8a'); grd.addColorStop(0.55, COL.ball); grd.addColorStop(1, COL.ballDeep);
+    ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(bx, by - lift, r * sc, 0, 6.2832); ctx.fill();
+    ctx.lineWidth = 2.2 * u * sc; ctx.strokeStyle = 'rgba(255,255,255,.75)';
+    ctx.beginPath(); ctx.arc(bx - r * sc * 1.15, by - lift, r * sc * 0.95, -0.85, 0.85); ctx.stroke();
+    ctx.beginPath(); ctx.arc(bx + r * sc * 1.15, by - lift, r * sc * 0.95, Math.PI - 0.85, Math.PI + 0.85); ctx.stroke();
+    // poziomnica przechyłu (tylko z czujnikami)
+    if (sensors && S.phase !== 'idle') {
+      var lx = W / 2, ly = 44 * u, lr = 24 * u;
+      ctx.lineWidth = 2 * u; ctx.strokeStyle = 'rgba(238,244,255,.5)';
+      ctx.beginPath(); ctx.arc(lx, ly, lr, 0, 6.2832); ctx.stroke();
+      var dx = clamp(S.tiltR / 0.35, -1, 1) * (lr - 6 * u), dy = clamp(-S.tiltF / 0.35, -1, 1) * (lr - 6 * u);
+      ctx.fillStyle = COL.ball; ctx.beginPath(); ctx.arc(lx + dx, ly + dy, 5 * u, 0, 6.2832); ctx.fill();
+    }
+  }
+
+  var last = performance.now();
+  function frame(now) {
+    var dt = Math.min((now - last) / 1000, 0.05); last = now;
+    step(now, dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  resize(); syncUI();
+  requestAnimationFrame(frame);
+
+  // offline po dodaniu do ekranu początkowego (działa tylko, gdy strona jest hostowana z manifestem)
+  try {
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && document.querySelector('link[rel="manifest"]')) {
+      navigator.serviceWorker.register('sw.js').catch(function () {});
+    }
+  } catch (e) {}
+})();
+</script>
+
+</body>
+</html>
